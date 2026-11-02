@@ -1,0 +1,47 @@
+name: ElecLeap iOS Release
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: elecleap-ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.2.app/Contents/Developer
+          xcodebuild -version
+      - name: Flutter 3.38.10
+        run: |
+          git clone --depth 1 --branch 3.38.10 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Analyze and test
+        run: |
+          flutter config --no-analytics
+          flutter pub get --enforce-lockfile
+          flutter analyze
+          flutter test --reporter expanded
+      - name: Build arm64 Release
+        run: flutter build ios --release --no-codesign --build-number="$GITHUB_RUN_NUMBER"
+      - name: Package and verify
+        run: |
+          python3 tools/package_ios.py build/ios/iphoneos/Runner.app artifacts/ElecLeap-unsigned.ipa
+          xcodebuild -version > artifacts/toolchain.txt
+          flutter --version >> artifacts/toolchain.txt
+          file build/ios/iphoneos/Runner.app/Runner >> artifacts/toolchain.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ElecLeap-iPhone
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 0
