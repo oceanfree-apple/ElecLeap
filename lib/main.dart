@@ -529,7 +529,9 @@ class _WorkspaceState extends State<WorkspacePage> {
             padding: const EdgeInsets.symmetric(horizontal: 5),
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: const TextStyle(fontSize: 14),
+            textStyle: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontSize: 14),
           ),
           onPressed: busy || device['role'] != 'owner'
               ? null
@@ -548,7 +550,9 @@ class _WorkspaceState extends State<WorkspacePage> {
             padding: const EdgeInsets.symmetric(horizontal: 5),
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: const TextStyle(fontSize: 14),
+            textStyle: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontSize: 14),
           ),
           onPressed: () =>
               push(context, SettingsPage(device: device)).then((_) => load()),
@@ -561,7 +565,9 @@ class _WorkspaceState extends State<WorkspacePage> {
             padding: const EdgeInsets.symmetric(horizontal: 5),
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: const TextStyle(fontSize: 14),
+            textStyle: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontSize: 14),
           ),
           onPressed: () =>
               push(context, AlbumPage(device: device)).then((_) => load()),
@@ -819,7 +825,16 @@ class _WorkspaceState extends State<WorkspacePage> {
   Widget _tool(String label, IconData icon, VoidCallback tap) => Expanded(
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
-      child: Pill(label, icon: icon, onTap: tap, outline: true, height: 38),
+      child: Pill(
+        label,
+        icon: icon,
+        onTap: tap,
+        outline: true,
+        height: 38,
+        fontSize: 14,
+        iconSize: 17,
+        horizontal: 7,
+      ),
     ),
   );
 }

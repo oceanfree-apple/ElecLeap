@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:elecleap/main.dart';
 import 'package:elecleap/ui.dart';
@@ -93,6 +94,25 @@ void main() {
     if (!Platform.environment.containsKey('ELECLEAP_SCREENSHOTS')) return;
     t.view.physicalSize = const Size(393, 852);
     t.view.devicePixelRatio = 1;
+    await t.runAsync(() async {
+      for (final pair in [
+        [
+          'Roboto',
+          '${Platform.environment['ELECLEAP_FONT_DIR']}/Roboto-Regular.ttf',
+        ],
+        ['CJK', '../assets/DroidSansFallbackFull.ttf'],
+        [
+          'MaterialIcons',
+          '${Platform.environment['ELECLEAP_FONT_DIR']}/MaterialIcons-Regular.otf',
+        ],
+      ]) {
+        final loader = FontLoader(pair[0])
+          ..addFont(
+            Future.value(ByteData.sublistView(File(pair[1]).readAsBytesSync())),
+          );
+        await loader.load();
+      }
+    });
     final key = GlobalKey();
     for (final page in ['frame', 'login']) {
       await t.pumpWidget(
@@ -100,6 +120,8 @@ void main() {
           key: key,
           child: MaterialApp(
             theme: ThemeData(
+              fontFamily: 'Roboto',
+              fontFamilyFallback: const ['CJK'],
               useMaterial3: true,
               colorScheme: ColorScheme.fromSeed(seedColor: gold),
             ),
@@ -116,12 +138,14 @@ void main() {
       await t.pumpAndSettle();
       final boundary =
           key.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 2);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      File(
-        '../../inspection/ui-ios-$page.png',
-      ).writeAsBytesSync(data!.buffer.asUint8List());
-      image.dispose();
+      await t.runAsync(() async {
+        final image = await boundary.toImage(pixelRatio: 2);
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        File(
+          '../../inspection/ui-ios-$page.png',
+        ).writeAsBytesSync(data!.buffer.asUint8List());
+        image.dispose();
+      });
     }
     await t.pumpWidget(const SizedBox());
     t.view.resetPhysicalSize();

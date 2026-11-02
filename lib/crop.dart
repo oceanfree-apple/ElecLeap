@@ -28,9 +28,15 @@ class CropPose {
     center = Offset(c * x - s * y, s * x + c * y);
   }
 
-  void paint(Canvas canvas, ui.Image image, Size size) {
+  void paint(
+    Canvas canvas,
+    ui.Image image,
+    Size size, {
+    bool clip = true,
+    double opacity = 1,
+  }) {
     canvas.save();
-    canvas.clipRect(Offset.zero & size);
+    if (clip) canvas.clipRect(Offset.zero & size);
     canvas.scale(size.width / w);
     canvas.translate(w / 2 + center.dx, h / 2 + center.dy);
     canvas.rotate(angle);
@@ -38,7 +44,9 @@ class CropPose {
     canvas.drawImage(
       image,
       Offset(-iw / 2, -ih / 2),
-      Paint()..filterQuality = FilterQuality.high,
+      Paint()
+        ..filterQuality = FilterQuality.high
+        ..color = Colors.white.withValues(alpha: opacity),
     );
     canvas.restore();
   }
@@ -230,7 +238,10 @@ class _CropPainter extends CustomPainter {
   final CropPose? pose;
   @override
   void paint(Canvas c, Size size) {
-    if (image != null && pose != null) pose!.paint(c, image!, size);
+    if (image != null && pose != null) {
+      pose!.paint(c, image!, size, clip: false, opacity: .25);
+      pose!.paint(c, image!, size);
+    }
     final p = Paint()
       ..color = Colors.white.withValues(alpha: .45)
       ..strokeWidth = .6;

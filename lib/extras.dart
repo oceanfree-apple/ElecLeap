@@ -250,6 +250,7 @@ class _WidgetState extends State<WidgetPage> {
       kind = w['kind'] ?? 'weather';
       city = cities.indexOf(w['city'] ?? '深圳').clamp(0, cities.length - 1);
       enabled = w['enabled'] == true;
+      background = w['background_asset'] != null;
       interval = (w['interval_minutes'] ?? 180) as int;
     }
   }
@@ -441,9 +442,11 @@ class _DrawState extends State<DrawPage> {
     setState(() => busy = true);
     try {
       final recorder = ui.PictureRecorder(), canvas = Canvas(recorder);
-      _DrawPainter(strokes).paint(canvas, const Size(480, 800));
+      final landscape = widget.device['config']?['orientation'] == 'landscape';
+      final size = landscape ? const Size(800, 480) : const Size(480, 800);
+      _DrawPainter(strokes).paint(canvas, size);
       final picture = recorder.endRecording(),
-          im = await picture.toImage(480, 800),
+          im = await picture.toImage(size.width.toInt(), size.height.toInt()),
           data = await im.toByteData(format: ui.ImageByteFormat.png);
       im.dispose();
       picture.dispose();
@@ -512,7 +515,10 @@ class _DrawState extends State<DrawPage> {
         Expanded(
           child: Center(
             child: AspectRatio(
-              aspectRatio: .6,
+              aspectRatio:
+                  widget.device['config']?['orientation'] == 'landscape'
+                  ? 800 / 480
+                  : .6,
               child: LayoutBuilder(
                 builder: (c, b) => GestureDetector(
                   onPanStart: busy
