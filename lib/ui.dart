@@ -122,12 +122,14 @@ class Pill extends StatelessWidget {
     this.fontSize = 17,
     this.iconSize = 22,
     this.horizontal = 15,
+    this.iconTint,
   });
   final String label;
   final IconData? icon;
   final VoidCallback? onTap;
   final bool black, outline, goldStyle, loading;
   final double height, fontSize, iconSize, horizontal;
+  final Color? iconTint;
   @override
   Widget build(BuildContext context) => AnimatedOpacity(
     duration: const Duration(milliseconds: 180),
@@ -168,11 +170,13 @@ class Pill extends StatelessWidget {
                   Icon(
                     icon,
                     size: iconSize,
-                    color: black
-                        ? Colors.white
-                        : goldStyle
-                        ? gold
-                        : ink,
+                    color:
+                        iconTint ??
+                        (black
+                            ? Colors.white
+                            : goldStyle
+                            ? gold
+                            : ink),
                   ),
                 if (label.isNotEmpty && (icon != null || loading))
                   const SizedBox(width: 5),

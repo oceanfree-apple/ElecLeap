@@ -36,15 +36,15 @@ final class ElecLeapBridge: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     self.controller = controller
     self.channel = FlutterMethodChannel(name: "elecleap/native", binaryMessenger: controller.binaryMessenger)
     super.init()
-    manager = CBCentralManager(delegate: self, queue: .main)
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self = self else { return }
       switch call.method {
       case "bleScan":
+        if self.manager == nil { self.scanResult = result; self.manager = CBCentralManager(delegate: self, queue: .main); return }
         self.manager.stopScan(); self.found.removeAll()
         if self.manager.state == .unknown || self.manager.state == .resetting { self.scanResult = result }
         else { self.startScan(result) }
-      case "bleStop": self.manager.stopScan(); result(nil)
+      case "bleStop": self.manager?.stopScan(); result(nil)
       case "bleConnect":
         guard let id = call.arguments as? String, let p = self.peers[id] else { result(self.error("设备已离开，请重新扫描")); return }
         self.manager.stopScan()
@@ -64,7 +64,7 @@ final class ElecLeapBridge: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         self.chunks = stride(from: 0, to: bytes.count, by: count).map { bytes.subdata(in: $0..<min($0+count,bytes.count)) }
         self.writeResult = result; self.writeNext()
       case "bleDisconnect":
-        self.manager.stopScan(); if let p = self.peripheral { self.manager.cancelPeripheralConnection(p) }; self.failed("连接已关闭"); result(nil)
+        self.manager?.stopScan(); if let p = self.peripheral { self.manager.cancelPeripheralConnection(p) }; self.failed("连接已关闭"); result(nil)
       case "scanQr": self.scanQR(result)
       case "savePhoto": self.savePhoto(call.arguments, result)
       default: result(FlutterMethodNotImplemented)

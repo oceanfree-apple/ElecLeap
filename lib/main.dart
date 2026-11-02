@@ -755,6 +755,7 @@ class _WorkspaceState extends State<WorkspacePage> {
                   child: Pill(
                     '',
                     icon: Icons.mic_none_outlined,
+                    iconTint: gold,
                     outline: true,
                     onTap: ai,
                     height: 48,

@@ -14,7 +14,10 @@ class CatalogPage extends StatefulWidget {
 class _CatalogState extends State<CatalogPage> {
   List<Json> items = [];
   int page = 0, pages = 1;
-  String tab = 'hot';
+  String tab = 'hot', category = '全部';
+  List<Json> get visible => widget.community || category == '全部'
+      ? items
+      : items.where((a) => a['category'] == category).toList();
   bool busy = false;
   @override
   void initState() {
@@ -93,6 +96,31 @@ class _CatalogState extends State<CatalogPage> {
         : null,
     child: Column(
       children: [
+        if (!widget.community)
+          SizedBox(
+            height: 55,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              children: [
+                for (final name in [
+                  '全部',
+                  ...items.map((a) => a['category'] as String).toSet(),
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: ChoiceChip(
+                      label: Text(name),
+                      selected: category == name,
+                      onSelected: (_) => setState(() => category = name),
+                      selectedColor: const Color(0xfff0e8d3),
+                      backgroundColor: Colors.white,
+                      side: BorderSide.none,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         if (widget.community)
           SegmentedButton<String>(
             segments: const [
@@ -125,9 +153,9 @@ class _CatalogState extends State<CatalogPage> {
                     mainAxisSpacing: 18,
                     crossAxisSpacing: 15,
                   ),
-                  itemCount: items.length,
+                  itemCount: visible.length,
                   itemBuilder: (c, i) {
-                    final a = items[i];
+                    final a = visible[i];
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
