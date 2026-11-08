@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api.dart';
@@ -426,11 +427,13 @@ class WorkspacePage extends StatefulWidget {
     required this.device,
     this.initialAsset,
     this.autoLoad = true,
+    this.previewPhoto,
     this.initialJob,
   });
   final Json device;
   final Json? initialAsset, initialJob;
   final bool autoLoad;
+  final Widget? previewPhoto;
   @override
   State<WorkspacePage> createState() => _WorkspaceState();
 }
@@ -439,29 +442,65 @@ class _WorkspaceState extends State<WorkspacePage> {
   late Json device;
   Json? asset, job;
   int count = 0;
-  bool busy = false, polling = false;
-  Timer? timer;
+  bool busy = false, polling = false, previewMode = false;
+  Timer? timer, previewTimer;
+
+  void armPreview() {
+    previewTimer?.cancel();
+    if (previewMode ||
+        (asset == null && widget.previewPhoto == null) ||
+        ['queued', 'downloaded'].contains(job?['status'])) {
+      return;
+    }
+    previewTimer = Timer(const Duration(seconds: 35), () {
+      if (mounted && (ModalRoute.of(context)?.isCurrent ?? true)) {
+        setState(() => previewMode = true);
+      }
+    });
+  }
+
+  void revealTools() {
+    if (!mounted) return;
+    setState(() => previewMode = false);
+    armPreview();
+  }
+
+  Future<void> openPage(Widget page) async {
+    previewTimer?.cancel();
+    await push(context, page);
+    if (mounted) {
+      revealTools();
+      await load();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     device = widget.device;
     asset = widget.initialAsset;
     job = widget.initialJob;
+    armPreview();
     if (widget.autoLoad) {
       load();
-      timer = Timer.periodic(const Duration(milliseconds: 2300), (_) => load());
+      timer = Timer.periodic(const Duration(milliseconds: 2300), (_) {
+        if (ModalRoute.of(context)?.isCurrent ?? true) load();
+      });
     }
   }
 
   @override
   void dispose() {
     timer?.cancel();
+    previewTimer?.cancel();
     super.dispose();
   }
 
   Future<void> load() async {
     if (polling) return;
     polling = true;
+    final previousJob = job?['id'];
+    final wasRefreshing = ['queued', 'downloaded'].contains(job?['status']);
     try {
       final ds = await api.request('/devices'),
           list = await api.request('/devices/${api.selected}/album'),
@@ -491,7 +530,17 @@ class _WorkspaceState extends State<WorkspacePage> {
           job = j == null ? null : Map<String, dynamic>.from(j);
           asset = a;
           count = (list as List).length;
+          if (['queued', 'downloaded'].contains(job?['status'])) {
+            previewMode = false;
+            previewTimer?.cancel();
+          } else if ((wasRefreshing ||
+                  (previousJob != null && previousJob != job?['id'])) &&
+              ['displayed', 'simulated'].contains(job?['status'])) {
+            previewMode = true;
+            previewTimer?.cancel();
+          }
         });
+        if (!previewMode && !(previewTimer?.isActive ?? false)) armPreview();
       }
     } catch (e) {
       if (mounted && api.token.isEmpty) notice('登录已过期，请返回重新登录');
@@ -513,8 +562,7 @@ class _WorkspaceState extends State<WorkspacePage> {
     }
   }
 
-  void photo() =>
-      push(context, PhotoEditor(device: device)).then((_) => load());
+  void photo() => openPage(PhotoEditor(device: device));
   void ai() => notice('AI 功能暂未开通');
   @override
   Widget build(BuildContext context) {
@@ -527,6 +575,7 @@ class _WorkspaceState extends State<WorkspacePage> {
       footer: footer([
         TextButton.icon(
           style: TextButton.styleFrom(
+            foregroundColor: ink,
             padding: const EdgeInsets.symmetric(horizontal: 5),
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -543,11 +592,12 @@ class _WorkspaceState extends State<WorkspacePage> {
                     data: {'orientation': portrait ? 'landscape' : 'portrait'},
                   );
                 }),
-          icon: const Icon(Icons.screen_rotation_outlined, size: 20),
+          icon: const LineIcon('orientation', size: 20),
           label: Text(portrait ? '纵向' : '横向'),
         ),
         TextButton.icon(
           style: TextButton.styleFrom(
+            foregroundColor: ink,
             padding: const EdgeInsets.symmetric(horizontal: 5),
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -555,14 +605,14 @@ class _WorkspaceState extends State<WorkspacePage> {
               context,
             ).textTheme.labelLarge?.copyWith(fontSize: 14),
           ),
-          onPressed: () =>
-              push(context, SettingsPage(device: device)).then((_) => load()),
-          icon: const Icon(Icons.settings_outlined, size: 20),
+          onPressed: () => openPage(SettingsPage(device: device)),
+          icon: const LineIcon('settings', size: 20),
           label: const Text('设置'),
         ),
         const Spacer(),
         TextButton.icon(
           style: TextButton.styleFrom(
+            foregroundColor: ink,
             padding: const EdgeInsets.symmetric(horizontal: 5),
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -570,9 +620,8 @@ class _WorkspaceState extends State<WorkspacePage> {
               context,
             ).textTheme.labelLarge?.copyWith(fontSize: 14),
           ),
-          onPressed: () =>
-              push(context, AlbumPage(device: device)).then((_) => load()),
-          icon: const Icon(Icons.image_outlined, size: 20),
+          onPressed: () => openPage(AlbumPage(device: device)),
+          icon: const LineIcon('image', size: 20),
           label: Text('相册 $count'),
         ),
       ]),
@@ -590,7 +639,7 @@ class _WorkspaceState extends State<WorkspacePage> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 21,
+                        fontSize: 18,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -611,94 +660,140 @@ class _WorkspaceState extends State<WorkspacePage> {
                 ],
               ),
             ),
-            SizedBox(
-              height: 65,
-              child: refreshing
-                  ? Center(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(40),
-                        child: SizedBox(
-                          width: 225,
-                          height: 42,
-                          child: Stack(
-                            children: [
-                              const Positioned.fill(
-                                child: ColoredBox(color: Colors.white),
-                              ),
-                              AnimatedFractionallySizedBox(
-                                duration: const Duration(seconds: 1),
-                                widthFactor: progress / 100,
-                                heightFactor: 1,
-                                child: const ColoredBox(
-                                  color: Color(0xff646660),
-                                ),
-                              ),
-                              Center(
-                                child: Text(
-                                  '正在刷新画框 $progress%',
-                                  style: const TextStyle(
-                                    color: gold,
-                                    fontSize: 15,
+            AnimatedSize(
+              key: const ValueKey('frame-tools'),
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeInOutCubic,
+              child: SizedBox(
+                height: previewMode && !refreshing ? 0 : 52,
+                child: ClipRect(
+                  child: OverflowBox(
+                    minHeight: 52,
+                    maxHeight: 52,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 220),
+                      opacity: previewMode && !refreshing ? 0 : 1,
+                      child: refreshing
+                          ? Center(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(40),
+                                child: SizedBox(
+                                  width: 225,
+                                  height: 42,
+                                  child: Stack(
+                                    children: [
+                                      const Positioned.fill(
+                                        child: ColoredBox(color: Colors.white),
+                                      ),
+                                      AnimatedFractionallySizedBox(
+                                        duration: const Duration(seconds: 1),
+                                        widthFactor: progress / 100,
+                                        heightFactor: 1,
+                                        child: const ColoredBox(
+                                          color: Color(0xff646660),
+                                        ),
+                                      ),
+                                      Center(
+                                        child: Text(
+                                          '正在刷新画框 $progress%',
+                                          style: const TextStyle(
+                                            color: gold,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _round(
-                          Icons.skip_next_outlined,
-                          () => action(() async {
-                            await api.request(
-                              '/devices/${api.selected}/next',
-                              method: 'POST',
-                              data: {},
-                            );
-                          }),
-                        ),
-                        _round(
-                          Icons.download_outlined,
-                          asset == null ? null : () => savePhoto(asset!),
-                        ),
-                        _round(
-                          Icons.delete_outline,
-                          asset == null
-                              ? null
-                              : () => action(() async {
-                                  if (!await confirm(
-                                    context,
-                                    '删除图片',
-                                    '从相框相册移除当前图片？',
-                                  )) {
-                                    return;
-                                  }
-                                  await api.request(
-                                    '/devices/${api.selected}/album/${asset!['id']}',
-                                    method: 'DELETE',
-                                  );
-                                }),
-                        ),
-                      ],
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _round(
+                                  'next',
+                                  () => action(() async {
+                                    await api.request(
+                                      '/devices/${api.selected}/next',
+                                      method: 'POST',
+                                      data: {},
+                                    );
+                                  }),
+                                ),
+                                _round(
+                                  'download',
+                                  asset == null
+                                      ? null
+                                      : () => savePhoto(asset!),
+                                ),
+                                _round(
+                                  'trash',
+                                  asset == null
+                                      ? null
+                                      : () => action(() async {
+                                          if (!await confirm(
+                                            context,
+                                            '删除图片',
+                                            '从相框相册移除当前图片？',
+                                          )) {
+                                            return;
+                                          }
+                                          await api.request(
+                                            '/devices/${api.selected}/album/${asset!['id']}',
+                                            method: 'DELETE',
+                                          );
+                                        }),
+                                ),
+                              ],
+                            ),
                     ),
+                  ),
+                ),
+              ),
             ),
             Expanded(
               child: LayoutBuilder(
                 builder: (c, b) {
-                  final ratio = portrait ? 0.64 : 1.56;
-                  return Center(
-                    child: SizedBox(
-                      width: (b.maxHeight - 12) * ratio > b.maxWidth - 35
-                          ? b.maxWidth - 35
-                          : (b.maxHeight - 12) * ratio,
-                      child: GestureDetector(
-                        onTap: asset == null ? photo : null,
-                        child: FrameArt(asset: asset, portrait: portrait),
+                  final quiet = previewMode && !refreshing;
+                  final ratio = portrait ? 3 / 5 : 5 / 3;
+                  final maxHeight = math.max(
+                    1.0,
+                    b.maxHeight + (quiet ? 24 : -14) - (quiet ? 10 : 2),
+                  );
+                  final maxWidth = math.min(
+                    b.maxWidth - (quiet ? 0 : 16),
+                    MediaQuery.sizeOf(context).width *
+                        (portrait ? (quiet ? .84 : .76) : .94),
+                  );
+                  final width = math.min(
+                    maxWidth,
+                    math.max(1.0, maxHeight - 62.4) * ratio + 54,
+                  );
+                  final height = (width - 54) / ratio + 62.4;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      AnimatedPositioned(
+                        key: const ValueKey('frame-position'),
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeInOutCubic,
+                        left: (b.maxWidth - width) / 2,
+                        top: quiet ? b.maxHeight + 24 - height : 2,
+                        width: width,
+                        height: height,
+                        child: GestureDetector(
+                          onTap: asset == null && widget.previewPhoto == null
+                              ? photo
+                              : revealTools,
+                          child: FrameArt(
+                            asset: asset,
+                            portrait: portrait,
+                            photo: widget.previewPhoto,
+                            outerAspectRatio: width / height,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   );
                 },
               ),
@@ -713,74 +808,85 @@ class _WorkspaceState extends State<WorkspacePage> {
                   style: TextStyle(color: Color(0xffb24e3e)),
                 ),
               ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: Pill(
-                    'AI 绘画',
-                    icon: Icons.camera_outlined,
-                    outline: true,
-                    onTap: ai,
-                    height: 48,
-                    fontSize: 16,
-                    horizontal: 8,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 500),
+              height: previewMode && !refreshing ? 0 : 14,
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: MediaQuery.sizeOf(context).width < 360 ? 0 : 12,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Pill(
+                      'AI 绘画',
+                      glyph: 'draw',
+                      outline: true,
+                      fontWeight: FontWeight.w600,
+                      onTap: ai,
+                      height: 46,
+                      fontSize: 16,
+                      horizontal: 8,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 62,
-                  child: Pill(
-                    '',
-                    icon: Icons.mic_none_outlined,
-                    iconTint: gold,
-                    outline: true,
-                    onTap: ai,
-                    height: 48,
-                    fontSize: 16,
-                    horizontal: 8,
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 62,
+                    child: Pill(
+                      '',
+                      glyph: 'mic',
+                      iconTint: gold,
+                      outline: true,
+                      fontWeight: FontWeight.w600,
+                      onTap: ai,
+                      height: 46,
+                      fontSize: 16,
+                      horizontal: 8,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Pill(
-                    'AI 涂鸦',
-                    icon: Icons.brush_outlined,
-                    outline: true,
-                    onTap: () => push(context, DrawPage(device: device)),
-                    height: 48,
-                    fontSize: 16,
-                    horizontal: 8,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Pill(
+                      'AI 涂鸦',
+                      glyph: 'brush',
+                      outline: true,
+                      fontWeight: FontWeight.w600,
+                      onTap: () => openPage(DrawPage(device: device)),
+                      height: 46,
+                      fontSize: 16,
+                      horizontal: 8,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(height: 14),
-            Row(
-              children: [
-                _tool(
-                  '创意',
-                  Icons.share_outlined,
-                  () => push(
-                    context,
-                    CatalogPage(device: device, community: true),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: MediaQuery.sizeOf(context).width < 360 ? 0 : 5,
+              ),
+              child: Row(
+                children: [
+                  _tool(
+                    '创意',
+                    'share',
+                    () =>
+                        openPage(CatalogPage(device: device, community: true)),
                   ),
-                ),
-                _tool(
-                  '画廊',
-                  Icons.image_outlined,
-                  () => push(context, MuseumGalleryPage(device: device)),
-                ),
-                _tool('图片', Icons.add, photo),
-                _tool(
-                  '小组件',
-                  Icons.calendar_today_outlined,
-                  () => push(
-                    context,
-                    WidgetPage(device: device),
-                  ).then((_) => load()),
-                ),
-              ],
+                  _tool(
+                    '画廊',
+                    'image',
+                    () => openPage(MuseumGalleryPage(device: device)),
+                  ),
+                  _tool('图片', 'plus', photo),
+                  _tool(
+                    '小组件',
+                    'calendar',
+                    () => openPage(WidgetPage(device: device)),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 23),
           ],
@@ -789,7 +895,7 @@ class _WorkspaceState extends State<WorkspacePage> {
     );
   }
 
-  Widget _round(IconData icon, VoidCallback? tap) => Padding(
+  Widget _round(String glyph, VoidCallback? tap) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 8),
     child: IconButton.filledTonal(
       onPressed: tap,
@@ -798,21 +904,22 @@ class _WorkspaceState extends State<WorkspacePage> {
         foregroundColor: ink,
         fixedSize: const Size(43, 43),
       ),
-      icon: Icon(icon, size: 23),
+      icon: LineIcon(glyph, size: 22),
     ),
   );
-  Widget _tool(String label, IconData icon, VoidCallback tap) => Expanded(
+  Widget _tool(String label, String glyph, VoidCallback tap) => Expanded(
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
       child: Pill(
         label,
-        icon: icon,
+        glyph: glyph,
         onTap: tap,
         outline: true,
+        fontWeight: FontWeight.w600,
         height: 38,
-        fontSize: 14,
-        iconSize: 17,
-        horizontal: 7,
+        fontSize: MediaQuery.sizeOf(context).width < 360 ? 12 : 14,
+        iconSize: MediaQuery.sizeOf(context).width < 360 ? 15 : 18,
+        horizontal: MediaQuery.sizeOf(context).width < 360 ? 3 : 7,
       ),
     ),
   );

@@ -274,11 +274,7 @@ class _PhotoEditorState extends State<PhotoEditor> {
                 bottom: 2,
                 child: IconButton(
                   tooltip: '顺时针旋转90°',
-                  icon: const Icon(
-                    Icons.rotate_90_degrees_cw_outlined,
-                    color: Colors.white,
-                    size: 29,
-                  ),
+                  icon: const LineIcon('rotate', color: Colors.white, size: 29),
                   onPressed: busy || pose == null
                       ? null
                       : () {

@@ -56,6 +56,41 @@ void main() {
     t.view.resetPhysicalSize();
     t.view.resetDevicePixelRatio();
   });
+  testWidgets('idle preview enlarges the frame and a tap reveals tools', (
+    t,
+  ) async {
+    t.view.physicalSize = const Size(393, 852);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+    await t.pumpWidget(
+      MaterialApp(
+        home: WorkspacePage(
+          device: device,
+          autoLoad: false,
+          previewPhoto: const ColoredBox(color: Colors.blue),
+          initialJob: const {'status': 'displayed'},
+        ),
+      ),
+    );
+    await t.pumpAndSettle();
+    final frame = find.byType(FrameArt),
+        tools = find.byKey(const ValueKey('frame-tools'));
+    final before = t.getSize(frame).width;
+    expect(t.getSize(tools).height, greaterThan(40));
+    await t.pump(const Duration(seconds: 33));
+    expect(t.getSize(tools).height, greaterThan(40));
+    await t.pump(const Duration(seconds: 2));
+    await t.pumpAndSettle();
+    expect(t.getSize(tools).height, 0);
+    expect(t.getSize(frame).width, greaterThan(before * 1.08));
+    await t.tap(frame);
+    await t.pumpAndSettle();
+    expect(t.getSize(tools).height, greaterThan(40));
+    expect(t.getSize(frame).width, closeTo(before, 1));
+    expect(t.takeException(), isNull);
+    await t.pumpWidget(const SizedBox());
+  });
   testWidgets('login and registration can switch without a server', (t) async {
     await t.pumpWidget(const MaterialApp(home: AuthPage()));
     await t.pump();
@@ -92,6 +127,9 @@ void main() {
     t,
   ) async {
     if (!Platform.environment.containsKey('ELECLEAP_SCREENSHOTS')) return;
+    final oldShadows = debugDisableShadows;
+    debugDisableShadows = false;
+    addTearDown(() => debugDisableShadows = oldShadows);
     t.view.physicalSize = const Size(393, 852);
     t.view.devicePixelRatio = 1;
     await t.runAsync(() async {
@@ -113,29 +151,54 @@ void main() {
         await loader.load();
       }
     });
+    final photo = MemoryImage(
+      File('../miniprogram/assets/reference-flight.jpg').readAsBytesSync(),
+    );
     final key = GlobalKey();
-    for (final page in ['frame', 'login']) {
+    for (final page in ['frame', 'frame-controls', 'frame-preview', 'login']) {
       await t.pumpWidget(
         RepaintBoundary(
           key: key,
           child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                padding: const EdgeInsets.only(top: 59, bottom: 34),
+                viewPadding: const EdgeInsets.only(top: 59, bottom: 34),
+              ),
+              child: child!,
+            ),
             theme: ThemeData(
               fontFamily: 'Roboto',
               fontFamilyFallback: const ['CJK'],
               useMaterial3: true,
               colorScheme: ColorScheme.fromSeed(seedColor: gold),
             ),
-            home: page == 'frame'
+            home: page.startsWith('frame')
                 ? WorkspacePage(
+                    key: ValueKey(page),
                     device: device,
                     autoLoad: false,
-                    initialJob: {'status': 'downloaded', 'progress': 30},
+                    previewPhoto: Image(image: photo, fit: BoxFit.cover),
+                    initialJob: page == 'frame'
+                        ? {'status': 'downloaded', 'progress': 30}
+                        : {'status': 'displayed'},
                   )
                 : const AuthPage(),
           ),
         ),
       );
       await t.pumpAndSettle();
+      if (page.startsWith('frame')) {
+        await t.runAsync(
+          () => precacheImage(photo, t.element(find.byType(FrameArt))),
+        );
+        await t.pumpAndSettle();
+      }
+      if (page == 'frame-preview') {
+        await t.pump(const Duration(seconds: 35));
+        await t.pumpAndSettle();
+      }
       final boundary =
           key.currentContext!.findRenderObject() as RenderRepaintBoundary;
       await t.runAsync(() async {
@@ -147,6 +210,7 @@ void main() {
         image.dispose();
       });
     }
+    debugDisableShadows = oldShadows;
     await t.pumpWidget(const SizedBox());
     t.view.resetPhysicalSize();
     t.view.resetDevicePixelRatio();

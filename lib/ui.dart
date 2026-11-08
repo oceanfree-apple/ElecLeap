@@ -191,11 +191,28 @@ class Shell extends StatelessWidget {
   );
 }
 
+class LineIcon extends StatelessWidget {
+  const LineIcon(this.name, {super.key, this.size = 22, this.color = ink});
+  final String name;
+  final double size;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => Image.asset(
+    'assets/icons/$name.png',
+    width: size,
+    height: size,
+    color: color,
+    colorBlendMode: BlendMode.srcIn,
+    filterQuality: FilterQuality.high,
+  );
+}
+
 class Pill extends StatelessWidget {
   const Pill(
     this.label, {
     super.key,
     this.icon,
+    this.glyph,
     this.onTap,
     this.black = false,
     this.outline = false,
@@ -206,13 +223,16 @@ class Pill extends StatelessWidget {
     this.iconSize = 22,
     this.horizontal = 15,
     this.iconTint,
+    this.fontWeight = FontWeight.w500,
   });
   final String label;
   final IconData? icon;
+  final String? glyph;
   final VoidCallback? onTap;
   final bool black, outline, goldStyle, loading;
   final double height, fontSize, iconSize, horizontal;
   final Color? iconTint;
+  final FontWeight fontWeight;
   @override
   Widget build(BuildContext context) => AnimatedOpacity(
     duration: const Duration(milliseconds: 180),
@@ -249,6 +269,18 @@ class Pill extends StatelessWidget {
                       color: black ? Colors.white : gold,
                     ),
                   )
+                else if (glyph != null)
+                  LineIcon(
+                    glyph!,
+                    size: iconSize,
+                    color:
+                        iconTint ??
+                        (black
+                            ? Colors.white
+                            : goldStyle
+                            ? gold
+                            : ink),
+                  )
                 else if (icon != null)
                   Icon(
                     icon,
@@ -261,7 +293,8 @@ class Pill extends StatelessWidget {
                             ? gold
                             : ink),
                   ),
-                if (label.isNotEmpty && (icon != null || loading))
+                if (label.isNotEmpty &&
+                    (icon != null || glyph != null || loading))
                   const SizedBox(width: 5),
                 Flexible(
                   child: Text(
@@ -274,7 +307,7 @@ class Pill extends StatelessWidget {
                           ? gold
                           : ink,
                       fontSize: fontSize,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: fontWeight,
                     ),
                   ),
                 ),
@@ -332,14 +365,16 @@ class FrameArt extends StatelessWidget {
     this.portrait = true,
     this.photo,
     this.padding = 21,
+    this.outerAspectRatio,
   });
   final Json? asset;
   final bool portrait;
   final Widget? photo;
   final double padding;
+  final double? outerAspectRatio;
   @override
   Widget build(BuildContext context) => AspectRatio(
-    aspectRatio: portrait ? 0.64 : 1.56,
+    aspectRatio: outerAspectRatio ?? (portrait ? 0.64 : 1.56),
     child: Container(
       padding: EdgeInsets.symmetric(
         horizontal: padding,
@@ -350,9 +385,21 @@ class FrameArt extends StatelessWidget {
         border: Border.all(color: Colors.black, width: 6),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x66000000),
-            blurRadius: 16,
-            offset: Offset(0, 13),
+            color: Color(0x4d000000),
+            blurRadius: 21,
+            spreadRadius: -6,
+            offset: Offset(0, 14),
+          ),
+          BoxShadow(
+            color: Color(0x47000000),
+            blurRadius: 9,
+            spreadRadius: -2,
+            offset: Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Color(0x2e000000),
+            blurRadius: 3,
+            offset: Offset(0, 1),
           ),
         ],
       ),
