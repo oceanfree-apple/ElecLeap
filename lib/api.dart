@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 typedef Json = Map<String, dynamic>;
 
 class Api {
-  Api({http.Client? client, this.base = 'https://42.194.237.249:8443'})
+  Api({http.Client? client, this.base = 'https://43.139.37.108:8443'})
     : client = client ?? http.Client();
   final http.Client client;
   final String base;

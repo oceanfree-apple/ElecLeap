@@ -232,7 +232,7 @@ class BleLink {
       'type': 'wifi_config',
       'ssid': ssid,
       'password': password,
-      'api_base': 'https://42.194.237.249/elecleap',
+      'api_base': 'https://43.139.37.108/elecleap',
     });
     while (true) {
       status(p['message'] ?? '正在连接网络');
