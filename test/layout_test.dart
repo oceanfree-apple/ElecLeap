@@ -57,7 +57,56 @@ void main() {
     t.view.resetPhysicalSize();
     t.view.resetDevicePixelRatio();
   });
-  testWidgets('idle preview enlarges the frame and a tap reveals tools', (
+  testWidgets(
+    'idle preview and frame taps switch between large and small views',
+    (t) async {
+      t.view.physicalSize = const Size(393, 852);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.resetPhysicalSize);
+      addTearDown(t.view.resetDevicePixelRatio);
+      await t.pumpWidget(
+        MaterialApp(
+          home: WorkspacePage(
+            device: device,
+            autoLoad: false,
+            previewPhoto: const ColoredBox(color: Colors.blue),
+            initialJob: const {'status': 'displayed'},
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      final frame = find.byType(FrameArt),
+          tools = find.byKey(const ValueKey('frame-tools'));
+      final enlarged = t.getSize(frame).width;
+      expect(t.getSize(tools).height, 0);
+      expect(
+        t.getRect(frame).bottom,
+        lessThan(t.getRect(find.widgetWithText(Pill, 'AI 绘画')).top),
+      );
+      await t.tap(frame);
+      await t.pumpAndSettle();
+      final before = t.getSize(frame).width;
+      expect(enlarged, greaterThan(before));
+      expect(t.getSize(tools).height, greaterThan(40));
+      await t.pump(const Duration(seconds: 13));
+      expect(t.getSize(tools).height, greaterThan(40));
+      await t.pump(const Duration(seconds: 2));
+      await t.pumpAndSettle();
+      expect(t.getSize(tools).height, 0);
+      expect(t.getSize(frame).width, greaterThan(before));
+      await t.tap(frame);
+      await t.pumpAndSettle();
+      expect(t.getSize(tools).height, greaterThan(40));
+      expect(t.getSize(frame).width, closeTo(before, 1));
+      expect(find.byTooltip('放大预览'), findsNothing);
+      await t.tap(frame);
+      await t.pumpAndSettle();
+      expect(t.getSize(tools).height, 0);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets('orientation changes only the small preview before refresh', (
     t,
   ) async {
     t.view.physicalSize = const Size(393, 852);
@@ -70,40 +119,78 @@ void main() {
           device: device,
           autoLoad: false,
           previewPhoto: const ColoredBox(color: Colors.blue),
-          initialJob: const {'status': 'displayed'},
+          initialJob: const {'id': 'existing-job', 'status': 'displayed'},
         ),
       ),
     );
     await t.pumpAndSettle();
-    final frame = find.byType(FrameArt),
-        tools = find.byKey(const ValueKey('frame-tools'));
-    final enlarged = t.getSize(frame).width;
-    expect(t.getSize(tools).height, 0);
+    await t.tap(find.text('纵向'));
+    await t.pumpAndSettle();
+    final frame = find.byType(FrameArt);
+    expect(find.text('横向'), findsOneWidget);
+    expect(t.getSize(frame).width, greaterThan(t.getSize(frame).height));
     expect(
-      t.getRect(frame).bottom,
-      lessThan(t.getRect(find.widgetWithText(Pill, 'AI 绘画')).top),
+      t.getSize(find.byKey(const ValueKey('frame-tools'))).height,
+      greaterThan(40),
     );
+    expect(t.widget<FrameArt>(frame).quarterTurns, 1);
+    expect(device['config']['orientation'], 'portrait');
+    expect(find.textContaining('正在刷新画框'), findsNothing);
     await t.tap(frame);
     await t.pumpAndSettle();
-    final before = t.getSize(frame).width;
-    expect(enlarged, greaterThan(before));
-    expect(t.getSize(tools).height, greaterThan(40));
-    await t.pump(const Duration(seconds: 13));
-    expect(t.getSize(tools).height, greaterThan(40));
-    await t.pump(const Duration(seconds: 2));
+    expect(t.getSize(find.byKey(const ValueKey('frame-tools'))).height, 0);
+    await t.tap(find.text('横向'));
     await t.pumpAndSettle();
-    expect(t.getSize(tools).height, 0);
-    expect(t.getSize(frame).width, greaterThan(before));
-    await t.tap(frame);
-    await t.pumpAndSettle();
-    expect(t.getSize(tools).height, greaterThan(40));
-    expect(t.getSize(frame).width, closeTo(before, 1));
-    await t.tap(find.byTooltip('放大预览'));
-    await t.pumpAndSettle();
-    expect(t.getSize(tools).height, 0);
+    expect(find.text('纵向'), findsOneWidget);
+    expect(t.widget<FrameArt>(frame).quarterTurns, 0);
     expect(t.takeException(), isNull);
     await t.pumpWidget(const SizedBox());
   });
+  testWidgets(
+    'landscape frame stays centered with tools and refresh progress',
+    (t) async {
+      addTearDown(t.view.resetPhysicalSize);
+      addTearDown(t.view.resetDevicePixelRatio);
+      t.view.devicePixelRatio = 1;
+      for (final size in [const Size(320, 568), const Size(393, 852)]) {
+        t.view.physicalSize = size;
+        for (final refreshing in [false, true]) {
+          await t.pumpWidget(
+            MaterialApp(
+              home: WorkspacePage(
+                key: ValueKey('$size-$refreshing'),
+                device: {
+                  ...device,
+                  'config': {...device['config'], 'orientation': 'landscape'},
+                },
+                autoLoad: false,
+                previewPhoto: const ColoredBox(color: Colors.blue),
+                initialJob: {
+                  'status': refreshing ? 'downloaded' : 'displayed',
+                  'progress': 30,
+                },
+              ),
+            ),
+          );
+          await t.pumpAndSettle();
+          if (!refreshing) {
+            await t.tap(find.byType(FrameArt));
+            await t.pumpAndSettle();
+          }
+          final positioned = find.byKey(const ValueKey('frame-position'));
+          final region = find
+              .ancestor(of: positioned, matching: find.byType(Stack))
+              .first;
+          expect(
+            t.getCenter(find.byType(FrameArt)).dy,
+            closeTo(t.getCenter(region).dy, 1),
+          );
+          expect(t.takeException(), isNull);
+        }
+      }
+      await t.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets('AI styles, voice prompt and doodle prompt fit small phones', (
     t,
   ) async {

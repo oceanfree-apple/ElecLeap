@@ -1,8 +1,10 @@
 # ElecLeap iPhone
 
-Flutter 3.38.10 companion for the ElecLeap e-paper photo frame, version 0.5.0.
+Flutter 3.38.10 companion for the ElecLeap e-paper photo frame, version 0.6.0.
 
-Cream surfaces, black frames and pills, muted gold accents. Includes account registration/login and Keychain sessions, photo crop with distance-based two-finger zoom/pan and a clockwise 90-degree button, one-step upload/display, device-confirmed refresh progress, scrolling thumbnail/large albums with direct display, scoped names and tags, slideshow, device sharing, photo-backed calendar/weather/countdown/countup widgets, gallery collections/community, and manual drawing. BLE uses native CoreBluetooth with the same authenticated EL1 HMAC/HKDF/AES-GCM protocol as the mini-program and ESP32 firmware. AI/voice entrances remain inactive.
+Cream surfaces, black frames and pills, muted gold accents. Includes account registration/login and Keychain sessions, photo crop with distance-based two-finger zoom/pan and a clockwise 90-degree button, one-step upload/display, device-confirmed refresh progress, scrolling thumbnail/large albums with direct display, scoped names and tags, slideshow, six-digit device sharing, photo-backed calendar/weather/countdown/countup widgets, gallery collections/community, manual drawing, and cloud AI creation with editable speech transcription and optional photo/sketch references. BLE uses native CoreBluetooth with the same authenticated EL1 HMAC/HKDF/AES-GCM protocol as the mini-program and ESP32 firmware.
+
+The frame opens in enlarged preview. Touching the page reveals the three tools; tapping the small frame or leaving it idle for 15 seconds enlarges it again. Orientation changes remain local until the user explicitly refreshes. Landscape frames stay centered with tools or refresh progress. Real cloud generation was checked using one Flash sketch image; Pro and native microphone behavior are recorded separately from fixture-backed UI checks.
 
 The public app contains no cloud login token, WiFi password, device key or Apple credentials. The HTTPS service address is public configuration; users authenticate normally. A one-time linking code from the mini-program can connect an empty iPhone account to the existing WeChat owner.
 

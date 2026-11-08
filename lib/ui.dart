@@ -368,12 +368,14 @@ class FrameArt extends StatelessWidget {
     this.photo,
     this.padding = 21,
     this.outerAspectRatio,
+    this.quarterTurns = 0,
   });
   final Json? asset;
   final bool portrait;
   final Widget? photo;
   final double padding;
   final double? outerAspectRatio;
+  final int quarterTurns;
   @override
   Widget build(BuildContext context) => AspectRatio(
     aspectRatio: outerAspectRatio ?? (portrait ? 0.64 : 1.56),
@@ -409,27 +411,30 @@ class FrameArt extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border.all(color: const Color(0xffc4c9c1)),
         ),
-        child:
-            photo ??
-            (asset == null
-                ? const ColoredBox(
-                    color: Color(0xfff0efea),
-                    child: Center(
-                      child: Icon(
-                        Icons.add_photo_alternate_outlined,
-                        color: gray,
-                        size: 42,
+        child: RotatedBox(
+          quarterTurns: quarterTurns,
+          child:
+              photo ??
+              (asset == null
+                  ? const ColoredBox(
+                      color: Color(0xfff0efea),
+                      child: Center(
+                        child: Icon(
+                          Icons.add_photo_alternate_outlined,
+                          color: gray,
+                          size: 42,
+                        ),
                       ),
-                    ),
-                  )
-                : Image.network(
-                    api.image(asset!),
-                    headers: api.headers,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const Center(
-                      child: Icon(Icons.broken_image_outlined, color: gray),
-                    ),
-                  )),
+                    )
+                  : Image.network(
+                      api.image(asset!),
+                      headers: api.headers,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const Center(
+                        child: Icon(Icons.broken_image_outlined, color: gray),
+                      ),
+                    )),
+        ),
       ),
     ),
   );

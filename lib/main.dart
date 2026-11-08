@@ -442,8 +442,11 @@ class WorkspacePage extends StatefulWidget {
 class _WorkspaceState extends State<WorkspacePage> {
   late Json device;
   Json? asset, job;
+  String? draftOrientation;
+  final frameHitKey = GlobalKey();
   int count = 0;
-  bool busy = false, polling = false, previewMode = true;
+  bool busy = false, previewMode = true;
+  Future<void>? loadFuture;
   Timer? timer, previewTimer;
 
   void armPreview() {
@@ -471,6 +474,44 @@ class _WorkspaceState extends State<WorkspacePage> {
     if (mounted && !['queued', 'downloaded'].contains(job?['status'])) {
       setState(() => previewMode = true);
     }
+  }
+
+  void interactPage(PointerDownEvent event) {
+    final box = frameHitKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box != null &&
+        (Offset.zero & box.size).contains(box.globalToLocal(event.position))) {
+      return;
+    }
+    revealTools();
+  }
+
+  void rotatePreview() {
+    if (busy || ['queued', 'downloaded'].contains(job?['status'])) return;
+    final applied = device['config']?['orientation'] ?? 'portrait';
+    final target = (draftOrientation ?? applied) == 'portrait'
+        ? 'landscape'
+        : 'portrait';
+    setState(() {
+      draftOrientation = target == applied ? null : target;
+      previewMode = false;
+    });
+    armPreview();
+  }
+
+  Future<void> refreshFrame() async {
+    if (busy || ['queued', 'downloaded'].contains(job?['status'])) return;
+    if (asset == null) return;
+    await action(() async {
+      if (draftOrientation != null) {
+        await api.request(
+          '/devices/${api.selected}/orientation',
+          method: 'POST',
+          data: {'orientation': draftOrientation},
+        );
+      } else {
+        await api.display(asset!);
+      }
+    });
   }
 
   Future<void> openPage(Widget page) async {
@@ -504,9 +545,14 @@ class _WorkspaceState extends State<WorkspacePage> {
     super.dispose();
   }
 
-  Future<void> load() async {
-    if (polling) return;
-    polling = true;
+  Future<void> load() {
+    if (loadFuture != null) return loadFuture!;
+    final future = fetchWorkspace();
+    loadFuture = future;
+    return future.whenComplete(() => loadFuture = null);
+  }
+
+  Future<void> fetchWorkspace() async {
     final previousJob = job?['id'];
     final wasRefreshing = ['queued', 'downloaded'].contains(job?['status']);
     try {
@@ -536,6 +582,10 @@ class _WorkspaceState extends State<WorkspacePage> {
         setState(() {
           device = Map<String, dynamic>.from(d);
           job = j == null ? null : Map<String, dynamic>.from(j);
+          if ((previousJob != null && previousJob != job?['id']) ||
+              draftOrientation == device['config']?['orientation']) {
+            draftOrientation = null;
+          }
           asset = a;
           count = (list as List).length;
           if (['queued', 'downloaded'].contains(job?['status'])) {
@@ -552,8 +602,6 @@ class _WorkspaceState extends State<WorkspacePage> {
       }
     } catch (e) {
       if (mounted && api.token.isEmpty) notice('登录已过期，请返回重新登录');
-    } finally {
-      polling = false;
     }
   }
 
@@ -561,7 +609,9 @@ class _WorkspaceState extends State<WorkspacePage> {
     if (busy) return;
     setState(() => busy = true);
     try {
+      if (loadFuture != null) await loadFuture;
       await f();
+      if (loadFuture != null) await loadFuture;
       await load();
     } catch (e) {
       notice(e);
@@ -575,7 +625,9 @@ class _WorkspaceState extends State<WorkspacePage> {
       openPage(AiPage(device: device, voice: voice));
   @override
   Widget build(BuildContext context) {
-    final portrait = device['config']?['orientation'] != 'landscape',
+    final portrait =
+            (draftOrientation ?? device['config']?['orientation']) !=
+            'landscape',
         refreshing =
             job != null && ['queued', 'downloaded'].contains(job!['status']),
         progress = (job?['progress'] ?? 4) as int;
@@ -592,15 +644,9 @@ class _WorkspaceState extends State<WorkspacePage> {
               context,
             ).textTheme.labelLarge?.copyWith(fontSize: 14),
           ),
-          onPressed: busy || device['role'] != 'owner'
+          onPressed: busy || refreshing || device['role'] != 'owner'
               ? null
-              : () => action(() async {
-                  await api.request(
-                    '/devices/${api.selected}/orientation',
-                    method: 'POST',
-                    data: {'orientation': portrait ? 'landscape' : 'portrait'},
-                  );
-                }),
+              : rotatePreview,
           icon: const LineIcon('orientation', size: 20),
           label: Text(portrait ? '纵向' : '横向'),
         ),
@@ -636,7 +682,7 @@ class _WorkspaceState extends State<WorkspacePage> {
       ]),
       child: Listener(
         behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) => revealTools(),
+        onPointerDown: interactPage,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
@@ -725,14 +771,8 @@ class _WorkspaceState extends State<WorkspacePage> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   _round(
-                                    'next',
-                                    () => action(() async {
-                                      await api.request(
-                                        '/devices/${api.selected}/next',
-                                        method: 'POST',
-                                        data: {},
-                                      );
-                                    }),
+                                    'refresh',
+                                    busy || asset == null ? null : refreshFrame,
                                   ),
                                   _round(
                                     'download',
@@ -758,11 +798,6 @@ class _WorkspaceState extends State<WorkspacePage> {
                                             );
                                           }),
                                   ),
-                                  IconButton(
-                                    tooltip: '放大预览',
-                                    onPressed: enterPreview,
-                                    icon: const LineIcon('expand', size: 19),
-                                  ),
                                 ],
                               ),
                       ),
@@ -779,7 +814,9 @@ class _WorkspaceState extends State<WorkspacePage> {
                     final maxWidth = math.min(
                       b.maxWidth - (quiet ? 0 : 16),
                       MediaQuery.sizeOf(context).width *
-                          (portrait ? (quiet ? .84 : .76) : .94),
+                          (portrait
+                              ? (quiet ? .84 : .76)
+                              : (quiet ? .94 : .82)),
                     );
                     final width = math.min(
                       maxWidth,
@@ -794,20 +831,26 @@ class _WorkspaceState extends State<WorkspacePage> {
                           duration: const Duration(milliseconds: 500),
                           curve: Curves.easeInOutCubic,
                           left: (b.maxWidth - width) / 2,
-                          top: quiet
-                              ? math.max(2.0, b.maxHeight - height - 4)
-                              : 2,
+                          top: (b.maxHeight - height) / 2,
                           width: width,
                           height: height,
                           child: GestureDetector(
+                            key: frameHitKey,
                             onTap: asset == null && widget.previewPhoto == null
                                 ? photo
-                                : revealTools,
+                                : () => previewMode
+                                      ? revealTools()
+                                      : enterPreview(),
                             child: FrameArt(
                               asset: asset,
                               portrait: portrait,
                               photo: widget.previewPhoto,
                               outerAspectRatio: width / height,
+                              quarterTurns: draftOrientation == null
+                                  ? 0
+                                  : portrait
+                                  ? 3
+                                  : 1,
                             ),
                           ),
                         ),
