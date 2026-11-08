@@ -9,6 +9,7 @@ import 'settings.dart';
 import 'sharing.dart';
 import 'provision.dart';
 import 'extras.dart';
+import 'gallery.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -681,29 +682,6 @@ class _WorkspaceState extends State<WorkspacePage> {
                                   );
                                 }),
                         ),
-                        _round(
-                          Icons.share_outlined,
-                          asset == null
-                              ? null
-                              : () => action(() async {
-                                  if (!await confirm(
-                                    context,
-                                    '分享作品',
-                                    '公开到创意广场，其他用户将可以看到这张图片。',
-                                  )) {
-                                    return;
-                                  }
-                                  await api.request(
-                                    '/community',
-                                    method: 'POST',
-                                    data: {
-                                      'asset_id': asset!['id'],
-                                      'caption': '',
-                                    },
-                                  );
-                                  notice('作品已分享');
-                                }),
-                        ),
                       ],
                     ),
             ),
@@ -791,7 +769,7 @@ class _WorkspaceState extends State<WorkspacePage> {
                 _tool(
                   '画廊',
                   Icons.image_outlined,
-                  () => push(context, CatalogPage(device: device)),
+                  () => push(context, MuseumGalleryPage(device: device)),
                 ),
                 _tool('图片', Icons.add, photo),
                 _tool(

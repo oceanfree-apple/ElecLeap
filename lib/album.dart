@@ -79,79 +79,201 @@ class _AlbumState extends State<AlbumPage> {
     }
   }
 
+  Future<void> rename(Json a) async {
+    final title = await prompt(
+      context,
+      '修改作品名称',
+      value: a['meta']?['title'] ?? '',
+      hint: '输入作品名称',
+    );
+    if (title == null) return;
+    if (title.length > 80) {
+      notice('作品名称最多80个字符');
+      return;
+    }
+    try {
+      await api.request(
+        '/devices/${widget.device['id']}/album/${a['id']}/title',
+        method: 'PUT',
+        data: {'title': title},
+      );
+      await load();
+    } catch (e) {
+      notice(e);
+    }
+  }
+
+  Future<void> tags(Json a) async {
+    final controller = TextEditingController(),
+        values = List<String>.from(a['tags'] ?? []);
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (d) => StatefulBuilder(
+        builder: (d, update) {
+          bool add() {
+            final t = controller.text.trim();
+            if (t.isEmpty) return true;
+            if (t.length > 20 || values.length >= 12) {
+              notice('最多12个标签，每个标签最多20个字符');
+              return false;
+            }
+            if (!values.contains(t)) values.add(t);
+            controller.clear();
+            update(() {});
+            return true;
+          }
+
+          return Dialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(27),
+            ),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 30),
+            child: Padding(
+              padding: const EdgeInsets.all(25),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    '管理标签',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 28),
+                  const Text(
+                    '图片标签',
+                    style: TextStyle(color: gray, fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      if (values.isEmpty) const Chip(label: Text('暂无')),
+                      for (final t in values)
+                        InputChip(
+                          label: Text(t),
+                          onDeleted: () => update(() => values.remove(t)),
+                          backgroundColor: const Color(0xfff6f1e5),
+                          side: BorderSide.none,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    '点击添加新标签',
+                    style: TextStyle(color: gray, fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DashedInput(controller: controller, hint: '新标签'),
+                      ),
+                      const SizedBox(width: 10),
+                      Pill('添加', height: 40, fontSize: 14, onTap: add),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Pill(
+                          '取消',
+                          height: 44,
+                          black: true,
+                          onTap: () => Navigator.pop(d),
+                        ),
+                      ),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Pill(
+                          '确定',
+                          height: 44,
+                          black: true,
+                          onTap: () {
+                            if (add()) {
+                              Navigator.pop(d, List<String>.from(values));
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    controller.dispose();
+    if (result == null) return;
+    try {
+      await api.request(
+        '/devices/${widget.device['id']}/album/${a['id']}/tags',
+        method: 'PUT',
+        data: {'tags': result},
+      );
+      await load();
+    } catch (e) {
+      notice(e);
+    }
+  }
+
+  Future<void> remove(Json a) async {
+    if (!await confirm(context, '删除图片', '从相框相册移除这张图片？')) return;
+    try {
+      await api.request(
+        '/devices/${widget.device['id']}/album/${a['id']}',
+        method: 'DELETE',
+      );
+      await load();
+    } catch (e) {
+      notice(e);
+    }
+  }
+
+  Future<void> publish(Json a) async {
+    if (!await confirm(context, '分享作品', '公开到创意广场后，其他用户可以看到这张图片。')) return;
+    try {
+      await api.request(
+        '/community',
+        method: 'POST',
+        data: {'asset_id': a['id'], 'caption': a['meta']?['title'] ?? ''},
+      );
+      notice('作品已分享');
+    } catch (e) {
+      notice(e);
+    }
+  }
+
   Future<void> actions(Json a) async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: cream,
       showDragHandle: true,
-      builder: (c) => Padding(
-        padding: const EdgeInsets.only(bottom: 30),
+      builder: (d) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.wallpaper),
-              title: const Text('设为画面'),
-              onTap: () {
-                Navigator.pop(c);
-                display(a);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.label_outline),
-              title: const Text('编辑标签'),
-              onTap: () async {
-                Navigator.pop(c);
-                final value = await prompt(
-                  context,
-                  '图片标签',
-                  value: (a['tags'] as List? ?? []).join(','),
-                  hint: '用逗号分隔，如：家人,旅行',
-                );
-                if (value == null) return;
-                try {
-                  await api.request(
-                    '/devices/${widget.device['id']}/album/${a['id']}/tags',
-                    method: 'PUT',
-                    data: {
-                      'tags': value
-                          .split(RegExp('[,，]'))
-                          .map((x) => x.trim())
-                          .where((x) => x.isNotEmpty)
-                          .toList(),
-                    },
-                  );
-                  load();
-                } catch (e) {
-                  notice(e);
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.download_outlined),
-              title: const Text('保存到手机'),
-              onTap: () {
-                Navigator.pop(c);
-                savePhoto(a);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('删除图片'),
-              onTap: () async {
-                Navigator.pop(c);
-                if (!await confirm(context, '删除图片', '从相框相册移除这张图片？')) return;
-                try {
-                  await api.request(
-                    '/devices/${widget.device['id']}/album/${a['id']}',
-                    method: 'DELETE',
-                  );
-                  load();
-                } catch (e) {
-                  notice(e);
-                }
-              },
-            ),
+            for (final action in [
+              (Icons.wallpaper, '显示', () => display(a)),
+              (Icons.edit_outlined, '修改作品名称', () => rename(a)),
+              (Icons.sell_outlined, '管理标签', () => tags(a)),
+              (Icons.download_outlined, '保存到手机', () => savePhoto(a)),
+              (Icons.delete_outline, '删除图片', () => remove(a)),
+              (Icons.share_outlined, '发布到创意广场', () => publish(a)),
+            ])
+              ListTile(
+                leading: Icon(action.$1),
+                title: Text(action.$2),
+                onTap: () {
+                  Navigator.pop(d);
+                  action.$3();
+                },
+              ),
           ],
         ),
       ),
@@ -273,67 +395,83 @@ class _AlbumState extends State<AlbumPage> {
                         ),
                       ),
                       const SizedBox(height: 18),
+                      Text(
+                        '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')} ${date.hour}:${date.minute.toString().padLeft(2, '0')}',
+                        style: const TextStyle(fontSize: 12, color: gray),
+                      ),
+                      if ((a['meta']?['title'] ?? '').isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: Text(
+                            a['meta']['title'],
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      if ((a['tags'] as List? ?? []).isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            for (final t in a['tags'])
+                              Chip(
+                                label: Text(t),
+                                backgroundColor: const Color(0xfff6f1e5),
+                                side: BorderSide.none,
+                              ),
+                          ],
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(35, 20, 35, 18),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Pill(
+                            '显示',
+                            icon: Icons.check,
+                            black: true,
+                            height: 43,
+                            onTap: busy ? null : () => display(a),
+                          ),
+                        ),
+                      ),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Flexible(
-                            child: Text(
-                              '${date.year}/${date.month}/${date.day}  ${date.hour}:${date.minute.toString().padLeft(2, '0')}',
-                              style: const TextStyle(fontSize: 12, color: gray),
+                          for (final action in [
+                            (Icons.edit_outlined, '修改作品名称', () => rename(a)),
+                            (Icons.sell_outlined, '管理标签', () => tags(a)),
+                            (Icons.delete_outline, '删除图片', () => remove(a)),
+                            (
+                              Icons.download_outlined,
+                              '保存到手机',
+                              () => savePhoto(a),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          TextButton.icon(
-                            onPressed: () async {
-                              final text = await prompt(
-                                context,
-                                '反馈',
-                                hint: '描述你遇到的问题',
-                              );
-                              if (text == null || text.isEmpty) return;
-                              try {
-                                await api.request(
-                                  '/feedback',
-                                  method: 'POST',
-                                  data: {'asset_id': a['id'], 'text': text},
-                                );
-                                notice('反馈已收到');
-                              } catch (e) {
-                                notice(e);
-                              }
-                            },
-                            icon: const Icon(
-                              Icons.assignment_outlined,
-                              size: 16,
-                            ),
-                            label: const Text('反馈'),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        a['meta']?['title'] ?? '生活记录',
-                        style: const TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          for (final t in a['tags'] ?? [])
-                            Chip(
-                              label: Text(t),
-                              backgroundColor: const Color(0xfff6f1e5),
-                              side: BorderSide.none,
+                          ])
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                              ),
+                              child: IconButton.filledTonal(
+                                style: IconButton.styleFrom(
+                                  backgroundColor: cream,
+                                  foregroundColor: ink,
+                                ),
+                                tooltip: action.$2,
+                                onPressed: action.$3,
+                                icon: Icon(action.$1, size: 19),
+                              ),
                             ),
                         ],
                       ),
-                      TextButton(
-                        onPressed: () => actions(a),
-                        child: const Text(
-                          '设置画面 · 标签 · 保存',
-                          style: TextStyle(color: gray, fontSize: 12),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: Text(
+                          '●',
+                          style: TextStyle(
+                            color: Color(0xffd3d1c3),
+                            fontSize: 10,
+                          ),
                         ),
                       ),
                     ],

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'api.dart';
 
@@ -48,27 +49,109 @@ Future<String?> prompt(
   final c = TextEditingController(text: value);
   final result = await showDialog<String>(
     context: context,
-    builder: (d) => AlertDialog(
-      backgroundColor: cream,
-      title: Text(title),
-      content: TextField(
-        controller: c,
-        obscureText: secret,
-        autofocus: true,
-        decoration: InputDecoration(hintText: hint),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(d), child: const Text('取消')),
-        TextButton(
-          onPressed: () => Navigator.pop(d, c.text.trim()),
-          child: const Text('确定'),
+    builder: (d) => BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 7, sigmaY: 7),
+      child: Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(25, 30, 25, 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 28),
+              DashedInput(controller: c, hint: hint, secret: secret),
+              const SizedBox(height: 32),
+              Row(
+                children: [
+                  Expanded(
+                    child: Pill(
+                      '取消',
+                      black: true,
+                      height: 44,
+                      onTap: () => Navigator.pop(d),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Pill(
+                      '确定',
+                      black: true,
+                      height: 44,
+                      onTap: () => Navigator.pop(d, c.text.trim()),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     ),
   );
   await Future<void>.delayed(const Duration(milliseconds: 200));
   c.dispose();
   return result;
+}
+
+class DashedInput extends StatelessWidget {
+  const DashedInput({
+    super.key,
+    required this.controller,
+    this.hint = '',
+    this.secret = false,
+  });
+  final TextEditingController controller;
+  final String hint;
+  final bool secret;
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    painter: _DashedBorder(),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+      child: TextField(
+        controller: controller,
+        obscureText: secret,
+        decoration: InputDecoration(
+          hintText: hint,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+        ),
+        style: const TextStyle(fontSize: 16),
+      ),
+    ),
+  );
+}
+
+class _DashedBorder extends CustomPainter {
+  @override
+  void paint(Canvas c, Size size) {
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(12)),
+      );
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3
+      ..color = const Color(0xffd0d0c7);
+    for (final m in path.computeMetrics()) {
+      for (double x = 0; x < m.length; x += 10) {
+        c.drawPath(m.extractPath(x, math.min(x + 5, m.length)), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class Shell extends StatelessWidget {
@@ -248,7 +331,7 @@ class FrameArt extends StatelessWidget {
     this.asset,
     this.portrait = true,
     this.photo,
-    this.padding = 22,
+    this.padding = 21,
   });
   final Json? asset;
   final bool portrait;
@@ -258,10 +341,13 @@ class FrameArt extends StatelessWidget {
   Widget build(BuildContext context) => AspectRatio(
     aspectRatio: portrait ? 0.64 : 1.56,
     child: Container(
-      padding: EdgeInsets.all(padding),
+      padding: EdgeInsets.symmetric(
+        horizontal: padding,
+        vertical: padding * 1.2,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: Colors.black, width: 7),
+        border: Border.all(color: Colors.black, width: 6),
         boxShadow: const [
           BoxShadow(
             color: Color(0x66000000),

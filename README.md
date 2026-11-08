@@ -1,8 +1,8 @@
 # ElecLeap iPhone
 
-Flutter 3.38.10 companion for the ElecLeap e-paper photo frame, version 0.4.0.
+Flutter 3.38.10 companion for the ElecLeap e-paper photo frame, version 0.5.0.
 
-Cream surfaces, black frames and pills, muted gold accents. Includes account registration/login and Keychain sessions, photo crop with simultaneous two-finger rotation/zoom/pan, one-step upload/display, device-confirmed refresh progress, scrolling thumbnail/large albums, tags, slideshow, device sharing, widgets, gallery/community, and manual drawing. BLE uses native CoreBluetooth with the same authenticated EL1 HMAC/HKDF/AES-GCM protocol as the mini-program and ESP32 firmware. AI/voice entrances remain inactive.
+Cream surfaces, black frames and pills, muted gold accents. Includes account registration/login and Keychain sessions, photo crop with distance-based two-finger zoom/pan and a clockwise 90-degree button, one-step upload/display, device-confirmed refresh progress, scrolling thumbnail/large albums with direct display, scoped names and tags, slideshow, device sharing, photo-backed calendar/weather/countdown/countup widgets, gallery collections/community, and manual drawing. BLE uses native CoreBluetooth with the same authenticated EL1 HMAC/HKDF/AES-GCM protocol as the mini-program and ESP32 firmware. AI/voice entrances remain inactive.
 
 The public app contains no cloud login token, WiFi password, device key or Apple credentials. The HTTPS service address is public configuration; users authenticate normally. A one-time linking code from the mini-program can connect an empty iPhone account to the existing WeChat owner.
 
