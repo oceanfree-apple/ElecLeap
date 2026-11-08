@@ -32,6 +32,8 @@ final class ElecLeapBridge: NSObject, CBCentralManagerDelegate, CBPeripheralDele
   var scanResult: FlutterResult?
   var chunks: [Data] = []
   var timeout: DispatchWorkItem?
+  var audioRecorder: AVAudioRecorder?
+  var audioURL: URL?
   init(controller: FlutterViewController) {
     self.controller = controller
     self.channel = FlutterMethodChannel(name: "elecleap/native", binaryMessenger: controller.binaryMessenger)
@@ -67,11 +69,49 @@ final class ElecLeapBridge: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         self.manager?.stopScan(); if let p = self.peripheral { self.manager.cancelPeripheralConnection(p) }; self.failed("连接已关闭"); result(nil)
       case "scanQr": self.scanQR(result)
       case "savePhoto": self.savePhoto(call.arguments, result)
+      case "audioStart": self.startAudio(result)
+      case "audioStop": self.stopAudio(result, discard: false)
+      case "audioCancel": self.stopAudio(result, discard: true)
       default: result(FlutterMethodNotImplemented)
       }
     }
   }
   func error(_ text: String) -> FlutterError { FlutterError(code: "ELECLEAP", message: text, details: nil) }
+  func startAudio(_ result: @escaping FlutterResult) {
+    AVAudioSession.sharedInstance().requestRecordPermission { allowed in
+      DispatchQueue.main.async {
+        guard allowed else { result(self.error("请在系统设置中允许 ElecLeap 使用麦克风")); return }
+        guard self.audioURL == nil else { result(self.error("录音已开始")); return }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("elecleap-\(UUID().uuidString).wav")
+        do {
+          let session = AVAudioSession.sharedInstance()
+          try session.setCategory(.record, mode: .measurement)
+          try session.setActive(true)
+          let settings: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 16000.0, AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16, AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsFloatKey: false]
+          let recorder = try AVAudioRecorder(url: url, settings: settings)
+          guard recorder.record(forDuration: 60) else { throw NSError(domain: "ElecLeapAudio", code: 1) }
+          self.audioRecorder = recorder; self.audioURL = url; result(nil)
+        } catch {
+          try? FileManager.default.removeItem(at: url)
+          try? AVAudioSession.sharedInstance().setActive(false)
+          result(self.error("无法开始录音，请稍后重试"))
+        }
+      }
+    }
+  }
+  func stopAudio(_ result: @escaping FlutterResult, discard: Bool) {
+    audioRecorder?.stop(); audioRecorder = nil
+    let url = audioURL; audioURL = nil
+    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    guard let url = url else { result(discard ? nil : error("没有可用的录音")); return }
+    defer { try? FileManager.default.removeItem(at: url) }
+    if discard { result(nil); return }
+    guard let data = try? Data(contentsOf: url), data.count > 200 else { result(error("录音太短，请重新说一遍")); return }
+    result(FlutterStandardTypedData(bytes: data))
+  }
   func event(_ values: [String: Any]) { channel.invokeMethod("bleEvent", arguments: values) }
   func startScan(_ result: @escaping FlutterResult) {
     guard manager.state == .poweredOn else {

@@ -94,6 +94,28 @@ class Api {
   }
 
   String image(Json asset) => '$base${asset['picture'] ?? asset['preview']}';
+  Future<String> transcribe(Uint8List audio) async {
+    final req =
+        http.MultipartRequest('POST', Uri.parse('$base/api/ai/transcribe'))
+          ..headers['Authorization'] = 'Bearer $token'
+          ..fields['format'] = 'wav'
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'audio',
+              audio,
+              filename: 'speech.wav',
+            ),
+          );
+    final res = await http.Response.fromStream(
+      await client.send(req).timeout(const Duration(seconds: 100)),
+    );
+    final body = jsonDecode(utf8.decode(res.bodyBytes));
+    if (res.statusCode != 200) {
+      throw Exception(body['detail'] is String ? body['detail'] : '语音识别失败');
+    }
+    return body['text'] as String;
+  }
+
   Future<Json> display(Json asset, {String? key}) async =>
       Map<String, dynamic>.from(
         await request(

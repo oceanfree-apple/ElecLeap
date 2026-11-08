@@ -102,9 +102,10 @@ class _SharingState extends State<SharingPage> {
                         child: TextField(
                           controller: code,
                           autocorrect: false,
-                          maxLength: 12,
+                          maxLength: 6,
+                          keyboardType: TextInputType.number,
                           decoration: const InputDecoration(
-                            hintText: '请输入分享码',
+                            hintText: '请输入6位分享码',
                             counterText: '',
                           ),
                         ),

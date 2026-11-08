@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'ui.dart';
+import 'ai.dart';
 export 'widgets.dart';
 
 class CatalogPage extends StatefulWidget {
@@ -268,8 +269,12 @@ class _DrawState extends State<DrawPage> {
   Color color = Colors.black;
   double width = 5;
   bool busy = false;
-  Future<void> send() async {
+  Future<void> send({bool useAi = false}) async {
     if (busy) return;
+    if (useAi && strokes.isEmpty) {
+      notice('先画下你的想法吧');
+      return;
+    }
     setState(() => busy = true);
     try {
       final recorder = ui.PictureRecorder(), canvas = Canvas(recorder);
@@ -285,8 +290,21 @@ class _DrawState extends State<DrawPage> {
         data!.buffer.asUint8List(),
         widget.device['config']?['orientation'] ?? 'portrait',
       );
-      await api.display(a);
-      if (mounted) Navigator.pop(context, true);
+      if (useAi) {
+        if (!mounted) return;
+        final displayed = await push<bool>(
+          context,
+          AiPage(
+            device: widget.device,
+            referenceAsset: a,
+            referenceBytes: data.buffer.asUint8List(),
+          ),
+        );
+        if (displayed == true && mounted) Navigator.pop(context, true);
+      } else {
+        await api.display(a);
+        if (mounted) Navigator.pop(context, true);
+      }
     } catch (e) {
       notice(e);
     } finally {
@@ -309,6 +327,15 @@ class _DrawState extends State<DrawPage> {
         icon: const Icon(Icons.auto_fix_normal),
       ),
       const Spacer(),
+      Pill(
+        'AI 创作',
+        glyph: 'brush',
+        outline: true,
+        height: 44,
+        fontSize: 14,
+        onTap: busy ? null : () => send(useAi: true),
+      ),
+      const SizedBox(width: 8),
       Pill('确定', black: true, onTap: busy ? null : send, loading: busy),
     ]),
     child: Column(

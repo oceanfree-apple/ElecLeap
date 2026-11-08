@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:elecleap/main.dart';
 import 'package:elecleap/ui.dart';
 import 'package:elecleap/album.dart';
+import 'package:elecleap/ai.dart';
 
 void main() {
   final device = <String, dynamic>{
@@ -76,19 +77,62 @@ void main() {
     await t.pumpAndSettle();
     final frame = find.byType(FrameArt),
         tools = find.byKey(const ValueKey('frame-tools'));
+    final enlarged = t.getSize(frame).width;
+    expect(t.getSize(tools).height, 0);
+    expect(
+      t.getRect(frame).bottom,
+      lessThan(t.getRect(find.widgetWithText(Pill, 'AI 绘画')).top),
+    );
+    await t.tap(frame);
+    await t.pumpAndSettle();
     final before = t.getSize(frame).width;
+    expect(enlarged, greaterThan(before));
     expect(t.getSize(tools).height, greaterThan(40));
-    await t.pump(const Duration(seconds: 33));
+    await t.pump(const Duration(seconds: 13));
     expect(t.getSize(tools).height, greaterThan(40));
     await t.pump(const Duration(seconds: 2));
     await t.pumpAndSettle();
     expect(t.getSize(tools).height, 0);
-    expect(t.getSize(frame).width, greaterThan(before * 1.08));
+    expect(t.getSize(frame).width, greaterThan(before));
     await t.tap(frame);
     await t.pumpAndSettle();
     expect(t.getSize(tools).height, greaterThan(40));
     expect(t.getSize(frame).width, closeTo(before, 1));
+    await t.tap(find.byTooltip('放大预览'));
+    await t.pumpAndSettle();
+    expect(t.getSize(tools).height, 0);
     expect(t.takeException(), isNull);
+    await t.pumpWidget(const SizedBox());
+  });
+  testWidgets('AI styles, voice prompt and doodle prompt fit small phones', (
+    t,
+  ) async {
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+    t.view.devicePixelRatio = 1;
+    for (final width in [320.0, 393.0]) {
+      t.view.physicalSize = Size(width, width == 320 ? 568 : 852);
+      for (final mode in ['styles', 'voice', 'doodle']) {
+        await t.pumpWidget(
+          MaterialApp(
+            home: AiPage(
+              key: ValueKey('$width-$mode'),
+              device: device,
+              autoLoad: false,
+              voice: mode == 'voice',
+              referenceAsset: mode == 'doodle' ? {'id': 'test-sketch'} : null,
+            ),
+          ),
+        );
+        await t.pumpAndSettle();
+        expect(t.takeException(), isNull);
+        if (mode == 'voice') {
+          await t.tap(find.text('开始创作'));
+          await t.pumpAndSettle();
+          expect(find.text('先写下或说出你想画的内容'), findsOneWidget);
+        }
+      }
+    }
     await t.pumpWidget(const SizedBox());
   });
   testWidgets('login and registration can switch without a server', (t) async {
@@ -155,7 +199,15 @@ void main() {
       File('../miniprogram/assets/reference-flight.jpg').readAsBytesSync(),
     );
     final key = GlobalKey();
-    for (final page in ['frame', 'frame-controls', 'frame-preview', 'login']) {
+    for (final page in [
+      'frame',
+      'frame-controls',
+      'frame-preview',
+      'login',
+      'ai',
+      'voice',
+      'doodle',
+    ]) {
       await t.pumpWidget(
         RepaintBoundary(
           key: key,
@@ -184,7 +236,17 @@ void main() {
                         ? {'status': 'downloaded', 'progress': 30}
                         : {'status': 'displayed'},
                   )
-                : const AuthPage(),
+                : page == 'login'
+                ? const AuthPage()
+                : AiPage(
+                    key: ValueKey(page),
+                    device: device,
+                    autoLoad: false,
+                    voice: page == 'voice',
+                    referenceAsset: page == 'doodle'
+                        ? {'id': 'test-sketch'}
+                        : null,
+                  ),
           ),
         ),
       );
@@ -195,8 +257,8 @@ void main() {
         );
         await t.pumpAndSettle();
       }
-      if (page == 'frame-preview') {
-        await t.pump(const Duration(seconds: 35));
+      if (page == 'frame-controls') {
+        await t.tap(find.byType(FrameArt));
         await t.pumpAndSettle();
       }
       final boundary =

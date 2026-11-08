@@ -224,6 +224,7 @@ class Pill extends StatelessWidget {
     this.horizontal = 15,
     this.iconTint,
     this.fontWeight = FontWeight.w500,
+    this.outlineWidth = 2,
   });
   final String label;
   final IconData? icon;
@@ -233,6 +234,7 @@ class Pill extends StatelessWidget {
   final double height, fontSize, iconSize, horizontal;
   final Color? iconTint;
   final FontWeight fontWeight;
+  final double outlineWidth;
   @override
   Widget build(BuildContext context) => AnimatedOpacity(
     duration: const Duration(milliseconds: 180),
@@ -246,7 +248,7 @@ class Pill extends StatelessWidget {
       shape: StadiumBorder(
         side: BorderSide(
           color: outline ? ink : const Color(0xffe9e8e2),
-          width: outline ? 2 : 1,
+          width: outline ? outlineWidth : 1,
         ),
       ),
       child: InkWell(
